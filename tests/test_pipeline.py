@@ -7,6 +7,8 @@ import pytest
 from iso20022_quality import (
     is_valid_iban, normalize_iban, parse_camt053, parse_pain001, read_xml_file, reconcile,
 )
+from defusedxml.common import EntitiesForbidden
+from xml.etree.ElementTree import ParseError
 from iso20022_quality.xml import UnsupportedMessage
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -110,7 +112,7 @@ def test_wrong_namespace_fails_closed():
 
 def test_xml_bomb_and_bounded_file_rejected(tmp_path):
     bomb = b'<!DOCTYPE doc [<!ENTITY x "EXPANDED">]><doc>&x;</doc>'
-    with pytest.raises(Exception):
+    with pytest.raises(EntitiesForbidden):
         parse_pain001(bomb)
     big = tmp_path / "big.xml"
     big.write_bytes(b"x" * 25)
@@ -127,7 +129,7 @@ def test_partial_date_and_amount_malformation_are_recorded():
 
 
 def test_malformed_xml_and_xml_limit_fail():
-    with pytest.raises(Exception):
+    with pytest.raises(ParseError):
         parse_pain001(b"<notxml>")
     with pytest.raises(ValueError):
         parse_pain001(b" " * (16 * 1024 * 1024 + 1))
