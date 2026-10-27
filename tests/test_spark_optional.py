@@ -202,3 +202,67 @@ def test_exact_spark_decimal_padding_and_excess_precision(spark):
     results = {r.payment_id: r.reconciliation_status
                for r in reconcile_spark(values, entries).collect()}
     assert results == {"P1": "MATCHED", "P2": "INVALID_AMOUNT"}
+
+
+def test_missing_statement_entry_identifier_cannot_be_matched(spark):
+    payments = spark.createDataFrame(
+        [("P1", "R1", "BE68539007547034", "12.50", "EUR"),
+         ("P2", "R2", "BE68539007547034", "12.50", "EUR")],
+        ["payment_id", "end_to_end_id", "debtor_iban", "amount", "currency"],
+    )
+    entries = spark.createDataFrame(
+        [(None, "R1", "BE68539007547034", "-12.50", "EUR", "BOOK"),
+         ("   ", "R2", "BE68539007547034", "-12.50", "EUR", "BOOK")],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"],
+    )
+    outcomes = {r.payment_id: (r.reconciliation_status, r.candidate_entry_id)
+                for r in reconcile_spark(payments, entries).collect()}
+    assert outcomes == {
+        "P1": ("INVALID_ENTRY_ID", None),
+        "P2": ("INVALID_ENTRY_ID", None),
+    }
+
+
+def test_explicit_matching_scope_handles_reused_references(spark):
+    payments = spark.createDataFrame(
+        [("P1", "SHARED", "BE68539007547034", "12.50", "EUR", "BANK-A"),
+         ("P2", "SHARED", "BE68539007547034", "13.50", "EUR", "BANK-B")],
+        ["payment_id", "end_to_end_id", "debtor_iban", "amount", "currency", "cohort"],
+    )
+    entries = spark.createDataFrame(
+        [("E1", "SHARED", "BE68539007547034", "-12.50", "EUR", "BOOK", "BANK-A"),
+         ("E2", "SHARED", "BE68539007547034", "-13.50", "EUR", "BOOK", "BANK-B")],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status", "cohort"],
+    )
+    unscoped = {r.payment_id: r.reconciliation_status
+                for r in reconcile_spark(payments, entries).collect()}
+    assert unscoped == {"P1": "AMBIGUOUS_MATCH", "P2": "AMBIGUOUS_MATCH"}
+    scoped = {r.payment_id: (r.reconciliation_status, r.candidate_entry_id)
+              for r in reconcile_spark(
+                  payments, entries, scope_columns=("cohort",)
+              ).collect()}
+    assert scoped == {"P1": ("MATCHED", "E1"), "P2": ("MATCHED", "E2")}
+
+
+def test_missing_scope_cannot_match_and_contract_is_checked(spark):
+    payments = spark.createDataFrame(
+        [("P1", "R1", "BE68539007547034", "12.50", "EUR", None),
+         ("P2", "R2", "BE68539007547034", "12.50", "EUR", " ")],
+        ["payment_id", "end_to_end_id", "debtor_iban", "amount", "currency", "cohort"],
+    )
+    entries = spark.createDataFrame(
+        [("E1", "R1", "BE68539007547034", "-12.50", "EUR", "BOOK", "BANK-A"),
+         ("E2", "R2", "BE68539007547034", "-12.50", "EUR", "BOOK", "BANK-B")],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status", "cohort"],
+    )
+    outcomes = {r.payment_id: r.reconciliation_status
+                for r in reconcile_spark(
+                    payments, entries, scope_columns=("cohort",)
+                ).collect()}
+    assert outcomes == {"P1": "UNMATCHABLE_SCOPE", "P2": "UNMATCHABLE_SCOPE"}
+    with pytest.raises(ValueError, match="both"):
+        reconcile_spark(payments, entries, scope_columns=("unknown_cohort",))
+    with pytest.raises(ValueError, match="reserved"):
+        reconcile_spark(payments, entries, scope_columns=("amount",))
+    with pytest.raises(TypeError, match="tuple"):
+        reconcile_spark(payments, entries, scope_columns="cohort")
