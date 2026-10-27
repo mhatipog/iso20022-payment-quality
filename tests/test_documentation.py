@@ -11,6 +11,7 @@ def test_relative_markdown_links_point_to_existing_files():
     pages = [
         ROOT / "README.md", ROOT / "PUBLISHING.md",
         ROOT / "CONTRIBUTING.md", ROOT / "SECURITY.md",
+        ROOT / "CHANGELOG.md",
         *sorted((ROOT / "docs").glob("*.md")),
     ]
     for page in pages:

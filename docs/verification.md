@@ -16,7 +16,7 @@ synthetic payment/demo, the independently controlled migration-acceptance
 example and the CLI against checked-in fixtures. It makes no network calls
 after dependencies are installed. The CLI and demo output is aggregate/synthetic.
 
-The Python coverage scope excludes `spark.py`, which runs in its own real
+The Python core coverage gate is **90% minimum**; a 27 October 2026 CI run measured **92% (60 tests)**. The Python coverage scope excludes `spark.py`, which runs in its own real
 PySpark integration job. **Coverage is execution evidence, not a proof of
 correctness**; it cannot certify XSD/EPC scheme compliance or true banking
 settlement status.

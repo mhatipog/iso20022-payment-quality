@@ -96,6 +96,7 @@ Run the large synthetic tests through the manually triggered [Spark scale workfl
 - [docs/production-readiness.md](docs/production-readiness.md) — missing controls and deployment prerequisites
 - [docs/bank-cases.md](docs/bank-cases.md) — provenance and limitations of external bank samples
 - [CONTRIBUTING.md](CONTRIBUTING.md) — reproducible changes, regression expectations and safe example data
+- [CHANGELOG.md](CHANGELOG.md) — tested changes, release boundaries and historical milestones
 - [SECURITY.md](SECURITY.md) — responsible vulnerability reporting
 - [PUBLISHING.md](PUBLISHING.md) — publication state and release checklist
 

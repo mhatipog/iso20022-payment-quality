@@ -28,7 +28,7 @@ def main() -> None:
     run(
         sys.executable, "-m", "pytest", "-q",
         "--ignore=tests/test_spark_optional.py",
-        "--cov=iso20022_quality", "--cov-report=term-missing",
+        "--cov=iso20022_quality", "--cov-fail-under=90", "--cov-report=term-missing",
         "--cov-report=xml:coverage.xml",
     )
     run(sys.executable, "examples/demo.py")
