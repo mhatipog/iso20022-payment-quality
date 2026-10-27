@@ -128,7 +128,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
 
     def financial_amount(column: str, *, signed: bool):
         raw = F.trim(F.col(column).cast("string"))
-        pattern = r"^-?[0-9]{1,16}(\\.[0-9]{1,8})?$" if signed else r"^[0-9]{1,16}(\\.[0-9]{1,8})?$"
+        pattern = r"^-?[0-9]{1,16}(\.[0-9]{1,8})?$" if signed else r"^[0-9]{1,16}(\.[0-9]{1,8})?$"
         return F.when(
             raw.rlike(pattern),
             F.expr(f"try_cast(trim(cast(`{column}` as string)) as decimal(24,8))"),
