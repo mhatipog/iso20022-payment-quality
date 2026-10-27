@@ -3,6 +3,7 @@
 from .iban import is_valid_iban, normalize_iban
 from .ingestion import FileReceipt, ReplayDecision, detect_replays, file_receipt
 from .lifecycle import PaymentLifecycle, link_payment_statuses
+from .migration_gate import MigrationControls, MigrationGateResult, assess_migration_gate
 from .models import (
     Diagnostic,
     Payment,
@@ -22,6 +23,8 @@ __all__ = [
     "BalanceAudit",
     "Diagnostic",
     "FileReceipt",
+    "MigrationControls",
+    "MigrationGateResult",
     "Payment",
     "PaymentFile",
     "PaymentLifecycle",
@@ -32,6 +35,7 @@ __all__ = [
     "Statement",
     "StatementEntry",
     "StatusReport",
+    "assess_migration_gate",
     "assess_readiness",
     "audit_camt053_balances",
     "detect_replays",
