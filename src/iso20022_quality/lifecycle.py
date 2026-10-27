@@ -29,6 +29,8 @@ def link_payment_statuses(
     seen = Counter(
         (p.message_id, p.payment_info_id, p.end_to_end_id, p.instruction_id) for p in payments
     )
+    ref_counts = Counter((p.message_id, p.payment_info_id, p.end_to_end_id)
+                         for p in payments)
     statuses: dict[tuple[str, str, str], list[PaymentStatus]] = defaultdict(list)
     for report in reports:
         for status in report.statuses:
@@ -59,7 +61,9 @@ def link_payment_statuses(
             for x in candidate
             if not x.original_instruction_id or x.original_instruction_id == payment.instruction_id
         )
-        if len({x.original_instruction_id for x in matching if x.original_instruction_id}) > 1:
+        ambiguous = (ref_counts[key4[:3]] > 1 and
+                     any(not x.original_instruction_id for x in matching))
+        if ambiguous or len({x.original_instruction_id for x in matching if x.original_instruction_id}) > 1:
             results.append(PaymentLifecycle(payment, "AMBIGUOUS_STATUS_REFERENCE", matching))
         elif matching:
             results.append(PaymentLifecycle(payment, "OBSERVED", matching))
