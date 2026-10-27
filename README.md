@@ -147,6 +147,14 @@ rejection. The Spark IBAN checksum uses native SQL higher-order functions, not a
 Python per-record UDF. Production jobs should partition by ingestion date and record
 batch provenance, and write via idempotent merge rather than unconditional append.
 
+
+For bank statement cohorts where EndToEndId+debtor account can be reused, provide a
+shared, upstream-verified `reconciliation_cohort` column in both canonical tables and
+call `reconcile_spark(..., scope_columns=("reconciliation_cohort",))`.
+Blank/missing scope or entry identifiers are review exceptions, never successful matches.
+Do not derive the cohort by equating execution date with booking date: bank holidays,
+value dates and cutoffs can differ. See [production readiness](docs/production-readiness.md).
+
 For reconciliation at scale, supply a unique `payment_id` and a unique `entry_id`
 plus canonical statement columns (`end_to_end_id`, `account_iban`, signed `amount`,
 `currency`, `status`) and use:
