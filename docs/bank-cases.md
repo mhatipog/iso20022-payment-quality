@@ -26,3 +26,14 @@ For regulated deployments add independently acquired official XSDs, a versioned
 EPC/Belgian bank implementation guideline, operational bank exceptions and compliance
 approval. Do not interpret a successful sample smoke as evidence of full message
 conformance or payment settlement.
+
+## Pinned independent open-source corpus
+
+The validation-only [external corpus runner](../examples/external_corpus_validation.py)
+checks four XML examples from Apache-2.0-licensed
+[sebastienrousseau/pain001](https://github.com/sebastienrousseau/pain001)
+at immutable revision `eef56caf0c93cee277cacce6f93181b4518b8669`.
+They are independent **synthetic** samples, not private real-world transactions or
+bank acceptance certificates. Only code and source URLs are committed here;
+no third-party examples are bundled in this repository.
+See [verification results](verification.md).
