@@ -19,7 +19,8 @@ The Spark implementation has no per-row Python UDF or driver-side collect. Its c
 1. Obtain licensed/authorized official ISO XSD and current EPC technical validation subsets; test supported versions and your bank's usage restrictions. XML extraction here is not equivalent to schema validation.
 2. Ingest XML in a scalable, bounded, secure reader; do not collect entire banking files onto a Spark driver. The built-in parser enforces a 16 MiB document limit.
 3. Partition reconciliation by institution, account and settlement/booking period. References can be reused across time and channels; this function does not discover an appropriate temporal join scope.
-4. Use immutable, source-derived transaction identities and configure idempotent Delta MERGE keys. Coordinate file-receipt recording with Silver and quarantine commits; the library's replay detector is not an atomic transactional ledger.
+4. Use immutable, source-derived transaction identities and configure idempotent Delta MERGE keys.
+4. Use immutable, source-derived transaction identities and configure idempotent Delta MERGE keys. The Python migration acceptance gate requires a nonblank, unique `(statement_id, entry_reference)` for every bank entry; if `NtryRef` is omitted, a deterministic, auditable canonical entry reference must be supplied by ingestion. Coordinate file-receipt recording with Silver and quarantine commits; the library's replay detector is not an atomic transactional ledger.
 5. Enforce RBAC, encryption, masking, retention and audit trails on account references and quarantine tables; never send raw financial records to telemetry.
 6. Run regression/canary jobs on representative *authorized* production samples, including paginated multi-day camt, returns, chargebacks, non-EUR accounts, multi-currency FX and status sequencing.
 7. Configure threshold alerts for invalid files, quality exceptions, unmatched values and reconcile drift. Keep human approval for any money movement.
