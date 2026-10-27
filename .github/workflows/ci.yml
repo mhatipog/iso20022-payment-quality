@@ -57,7 +57,7 @@ jobs:
           python -c "from pyspark.sql import SparkSession; from benchmarks.spark_reconciliation import run; s=SparkSession.builder.master('local[2]').config('spark.sql.shuffle.partitions','4').appName('banking-ci-bench').getOrCreate(); print(run(s, 20000)); s.stop()"
 
   public-bank-compatibility:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/validation/2026-10-27-bank-samples')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
