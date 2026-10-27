@@ -190,3 +190,43 @@ def test_controls_reject_fake_precision_and_untraceable_evidence():
         replace(controls, statement_debit_total=float("nan"))
     with pytest.raises(TypeError, match="MigrationControls"):
         assess_migration_gate([], [], {"payment_count": 1})
+
+
+def test_missing_bank_evidence_reference_blocks_acceptance_even_if_money_balances():
+    file, statement, controls = fixture()
+    for invalid in (
+        replace(statement.entries[0], entry_reference=""),
+        replace(statement.entries[0], entry_reference="   "),
+        replace(statement.entries[0], statement_id=""),
+    ):
+        result = assess(
+            file, replace(statement, entries=(invalid, statement.entries[1])), controls
+        )
+        assert result.decision == "BLOCKED"
+        assert "MISSING_STATEMENT_ENTRY_ID" in result.blocking_codes
+        assert result.matched_count == 2  # value checks alone cannot establish identity
+
+
+def test_duplicate_bank_entry_identity_blocks_even_with_distinct_payment_refs():
+    file, statement, controls = fixture()
+    duplicate = replace(
+        statement.entries[1],
+        entry_reference=statement.entries[0].entry_reference,
+    )
+    result = assess(file, replace(statement, entries=(statement.entries[0], duplicate)), controls)
+    assert result.decision == "BLOCKED"
+    assert "DUPLICATE_STATEMENT_ENTRY_ID" in result.blocking_codes
+    assert result.matched_count == 2
+
+
+def test_bank_entry_references_are_scoped_by_statement_id():
+    file, statement, controls = fixture()
+    other_statement = replace(
+        statement.entries[1],
+        statement_id="OTHER-STATEMENT",
+        entry_reference=statement.entries[0].entry_reference,
+    )
+    result = assess(
+        file, replace(statement, entries=(statement.entries[0], other_statement)), controls
+    )
+    assert result.decision == "PASS_TECHNICAL_CHECKS"
