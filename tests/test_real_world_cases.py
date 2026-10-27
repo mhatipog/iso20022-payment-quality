@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from iso20022_quality.xml import UnsupportedMessage
 from iso20022_quality import (audit_camt053_balances, parse_camt053,
                               parse_pain002, parse_pain001, reconcile, read_xml_file)
 
@@ -77,7 +78,7 @@ def test_bad_balance_currency_is_not_assessed():
 
 
 def test_status_parser_fails_closed_on_wrong_namespace():
-    with pytest.raises(Exception):
+    with pytest.raises(UnsupportedMessage):
         parse_pain002(read_xml_file(FIXTURES / "pain002_10.xml").replace(b".001.10", b".001.03"))
 
 
