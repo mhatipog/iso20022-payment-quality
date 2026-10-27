@@ -33,7 +33,9 @@ class _PageText(HTMLParser):
 
 
 def fetch_xml_example(url: str) -> str:
-    with urlopen(Request(url, headers={"User-Agent": "iso20022-quality-doc-smoke/0.2"}), timeout=20) as r:
+    with urlopen(
+        Request(url, headers={"User-Agent": "iso20022-quality-doc-smoke/0.2"}), timeout=20
+    ) as r:
         data = r.read(2_000_001)
     if len(data) > 2_000_000:
         raise ValueError("Public example page exceeds 2 MB limit")
@@ -47,7 +49,7 @@ def fetch_xml_example(url: str) -> str:
     end = text.find("</Document>", start)
     if start == -1 or end == -1:
         raise ValueError("No visible Document block found on the bank example page")
-    return text[start:end + len("</Document>")]
+    return text[start : end + len("</Document>")]
 
 
 def main():

@@ -1,8 +1,8 @@
 """Deterministic bank file replay/revision detection; keep state in your own ledger."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -29,8 +29,9 @@ def file_receipt(data: bytes, *, message_type: str, message_id: str) -> FileRece
     return FileReceipt(message_type, message_id, sha256(data).hexdigest(), len(data))
 
 
-def detect_replays(receipts: Iterable[FileReceipt],
-                   historical: Iterable[FileReceipt] = ()) -> tuple[ReplayDecision, ...]:
+def detect_replays(
+    receipts: Iterable[FileReceipt], historical: Iterable[FileReceipt] = ()
+) -> tuple[ReplayDecision, ...]:
     """Flag exact replays and a revised file with the same (message_type, MsgId).
 
     The caller must persist receipts transactionally with its Delta write; this

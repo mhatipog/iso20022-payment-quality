@@ -64,26 +64,43 @@ def audit_camt053_balances(data: bytes | str) -> tuple[BalanceAudit, ...]:
             reason = "BALANCE_CURRENCY_MISMATCH"
         # A statement page with LastPgInd=false cannot establish complete movement.
         elif _text(stmt, "StmtPgntn/LastPgInd", CAMT08).lower() == "false" or (
-                _text(stmt, "StmtPgntn/PgNb", CAMT08) not in ("", "1")):
+            _text(stmt, "StmtPgntn/PgNb", CAMT08) not in ("", "1")
+        ):
             reason = "PAGINATED_OR_INCOMPLETE_STATEMENT"
-        movement = Decimal("0")
+        movement = Decimal(0)
         for entry in _all(stmt, "Ntry", CAMT08):
             amount = _find(entry, "Amt", CAMT08)
             value = _decimal((amount.text or "").strip()) if amount is not None else None
             entry_ccy = amount.get("Ccy", "") if amount is not None else ""
             status = _text(entry, "Sts/Cd", CAMT08) or _text(entry, "Sts", CAMT08)
             direction = _text(entry, "CdtDbtInd", CAMT08)
-            if status != "BOOK" or value is None or value < 0 or entry_ccy != currency or (
-                    direction not in ("CRDT", "DBIT")):
+            if (
+                status != "BOOK"
+                or value is None
+                or value < 0
+                or entry_ccy != currency
+                or (direction not in ("CRDT", "DBIT"))
+            ):
                 reason = reason or "INCOMPLETE_OR_MIXED_BOOKINGS"
                 continue
             movement += value if direction == "CRDT" else -value
         if reason:
-            results.append(BalanceAudit(stmt_id, currency, opening, closing, None,
-                                        None, "NOT_ASSESSABLE", reason))
+            results.append(
+                BalanceAudit(
+                    stmt_id, currency, opening, closing, None, None, "NOT_ASSESSABLE", reason
+                )
+            )
         else:
             difference = closing - opening - movement
-            results.append(BalanceAudit(stmt_id, currency, opening, closing,
-                                        movement, difference,
-                                        "BALANCED" if difference == 0 else "DIFFERENCE"))
+            results.append(
+                BalanceAudit(
+                    stmt_id,
+                    currency,
+                    opening,
+                    closing,
+                    movement,
+                    difference,
+                    "BALANCED" if difference == 0 else "DIFFERENCE",
+                )
+            )
     return tuple(results)

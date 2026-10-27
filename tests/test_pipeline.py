@@ -1,14 +1,19 @@
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
+from xml.etree.ElementTree import ParseError
 
 import pytest
+from defusedxml.common import EntitiesForbidden
 
 from iso20022_quality import (
-    is_valid_iban, normalize_iban, parse_camt053, parse_pain001, read_xml_file, reconcile,
+    is_valid_iban,
+    normalize_iban,
+    parse_camt053,
+    parse_pain001,
+    read_xml_file,
+    reconcile,
 )
-from defusedxml.common import EntitiesForbidden
-from xml.etree.ElementTree import ParseError
 from iso20022_quality.xml import UnsupportedMessage
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -31,7 +36,7 @@ def test_valid_fixture_and_control_sum_exact():
     good, quarantine = result.partition()
     assert len(good) == 3 and len(quarantine) == 0
     assert not result.diagnostics
-    assert [p.amount for p in good] == [Decimal("100"), Decimal("50"), Decimal("20")]
+    assert [p.amount for p in good] == [Decimal(100), Decimal(50), Decimal(20)]
 
 
 def test_group_and_batch_count_mismatches_quarantine_whole_file():
@@ -42,8 +47,9 @@ def test_group_and_batch_count_mismatches_quarantine_whole_file():
 
 
 def test_header_control_sum_mismatch_quarantines_whole_batch():
-    result = parse_pain001(PAIN.replace(b"<CtrlSum>170.00</CtrlSum>",
-                                          b"<CtrlSum>170.01</CtrlSum>", 1))
+    result = parse_pain001(
+        PAIN.replace(b"<CtrlSum>170.00</CtrlSum>", b"<CtrlSum>170.01</CtrlSum>", 1)
+    )
     assert len(result.partition()[1]) == 3
     assert "CONTROL_SUM_MISMATCH" in {x.code for x in result.diagnostics}
 
@@ -58,8 +64,7 @@ def test_bad_creditor_iban_quarantines_only_one_record():
 def test_sepa_operational_currency_and_amount_rules():
     xml = PAIN.replace(b'Ccy="EUR">100.00', b'Ccy="USD">100.001')
     parsed = parse_pain001(xml)
-    assert {x.code for x in parsed.payments[0].issues} >= {
-        "SEPA_NON_EUR", "SEPA_AMOUNT_FRACTION"}
+    assert {x.code for x in parsed.payments[0].issues} >= {"SEPA_NON_EUR", "SEPA_AMOUNT_FRACTION"}
     assert parsed.partition()[1]
 
 
@@ -74,7 +79,7 @@ def test_reconciliation_does_not_mask_discrepancies():
     statement = parse_camt053(CAMT)
     found = reconcile(file.payments, statement.entries)
     assert [x.status for x in found] == ["MATCHED", "AMOUNT_MISMATCH", "NO_BOOKING_FOUND"]
-    assert found[0].entry.amount == Decimal("-100")
+    assert found[0].entry.amount == Decimal(-100)
 
 
 def test_reconciliation_rejects_ambiguous_refs():
@@ -95,12 +100,17 @@ def test_missing_end_to_end_does_not_match_other_missing_reference():
 
 
 def test_camt_aggregated_entry_not_fanned_out_or_matched():
-    xml = CAMT.replace(b"</NtryDtls>",
-        b"<TxDtls><Refs><EndToEndId>DEMO-E2E-003</EndToEndId></Refs></TxDtls></NtryDtls>", 1)
+    xml = CAMT.replace(
+        b"</NtryDtls>",
+        b"<TxDtls><Refs><EndToEndId>DEMO-E2E-003</EndToEndId></Refs></TxDtls></NtryDtls>",
+        1,
+    )
     parsed = parse_camt053(xml)
     assert parsed.entries[0].end_to_end_id == ""
     assert "AGGREGATED_ENTRY_NOT_MATCHABLE" in {x.code for x in parsed.entries[0].issues}
-    assert reconcile(parse_pain001(PAIN).payments[:1], parsed.entries)[0].status == "NO_BOOKING_FOUND"
+    assert (
+        reconcile(parse_pain001(PAIN).payments[:1], parsed.entries)[0].status == "NO_BOOKING_FOUND"
+    )
 
 
 def test_wrong_namespace_fails_closed():
@@ -121,11 +131,13 @@ def test_xml_bomb_and_bounded_file_rejected(tmp_path):
 
 
 def test_partial_date_and_amount_malformation_are_recorded():
-    xml = (PAIN.replace(b"2026-10-28", b"2026-27-28")
-           .replace(b'>100.00</InstdAmt>', b'>nan</InstdAmt>'))
+    xml = PAIN.replace(b"2026-10-28", b"2026-27-28").replace(
+        b">100.00</InstdAmt>", b">nan</InstdAmt>"
+    )
     parsed = parse_pain001(xml)
     assert {"INVALID_AMOUNT", "INVALID_EXECUTION_DATE"} <= {
-        x.code for x in parsed.payments[0].issues}
+        x.code for x in parsed.payments[0].issues
+    }
 
 
 def test_malformed_xml_and_xml_limit_fail():
@@ -137,7 +149,9 @@ def test_malformed_xml_and_xml_limit_fail():
 
 def test_readiness_aggregate_redacts_transaction_data():
     from dataclasses import asdict
+
     from iso20022_quality import assess_readiness
+
     p = parse_pain001(PAIN)
     s = parse_camt053(CAMT)
     report = assess_readiness([p], [s])
@@ -145,13 +159,17 @@ def test_readiness_aggregate_redacts_transaction_data():
     assert report.matched_pct_of_accepted == 33.33
     assert report.reference_coverage_pct == 100.0
     assert report.reconciliation_counts == {
-        "AMOUNT_MISMATCH": 1, "MATCHED": 1, "NO_BOOKING_FOUND": 1}
+        "AMOUNT_MISMATCH": 1,
+        "MATCHED": 1,
+        "NO_BOOKING_FOUND": 1,
+    }
     assert "BE68539007547034" not in str(asdict(report))
     assert "DEMO-E2E-001" not in str(asdict(report))
 
 
 def test_invalid_payment_is_not_marked_migration_ready():
     from iso20022_quality import assess_readiness
+
     xml = PAIN.replace(b"NL91ABNA0417164300", b"NL91ABNA0417164301", 1)
     report = assess_readiness([parse_pain001(xml)])
     assert report.accepted == 2 and report.quarantined == 1
@@ -189,16 +207,20 @@ def test_decimal_exact_sum_not_float_approximation():
 
 def test_xml_entity_is_rejected_even_when_root_matches_supported_version():
     from defusedxml.common import EntitiesForbidden
-    malicious = (b'<!DOCTYPE Document [<!ENTITY x "not-a-real-payment">]>'
-                 b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">'
-                 b'<CstmrCdtTrfInitn><GrpHdr><MsgId>&x;</MsgId></GrpHdr>'
-                 b'</CstmrCdtTrfInitn></Document>')
+
+    malicious = (
+        b'<!DOCTYPE Document [<!ENTITY x "not-a-real-payment">]>'
+        b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">'
+        b"<CstmrCdtTrfInitn><GrpHdr><MsgId>&x;</MsgId></GrpHdr>"
+        b"</CstmrCdtTrfInitn></Document>"
+    )
     with pytest.raises(EntitiesForbidden):
         parse_pain001(malicious)
 
 
 def test_notprovided_reference_warning_not_failure_and_no_false_zero_percent():
     from iso20022_quality import assess_readiness
+
     xml = PAIN.replace(b"DEMO-E2E-001", b"NOTPROVIDED")
     parsed = parse_pain001(xml)
     assert len(parsed.partition()[0]) == 3

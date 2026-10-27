@@ -1,8 +1,9 @@
 """Run `python examples/demo.py` after `pip install -e .` (all data synthetic)."""
-from pathlib import Path
-from collections import Counter
 
-from iso20022_quality import parse_pain001, parse_camt053, reconcile, read_xml_file
+from collections import Counter
+from pathlib import Path
+
+from iso20022_quality import parse_camt053, parse_pain001, read_xml_file, reconcile
 
 fixtures = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 file = parse_pain001(read_xml_file(fixtures / "pain09.xml"))

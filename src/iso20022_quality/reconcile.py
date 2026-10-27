@@ -1,14 +1,16 @@
 """Conservative, one-to-one payment to booked-bank-entry candidate matching."""
 
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from decimal import Decimal
-from typing import Iterable
 
 from .iban import normalize_iban
 from .models import Payment, Reconciliation, StatementEntry
 
 
-def reconcile(payments: Iterable[Payment], entries: Iterable[StatementEntry]) -> tuple[Reconciliation, ...]:
+def reconcile(
+    payments: Iterable[Payment], entries: Iterable[StatementEntry]
+) -> tuple[Reconciliation, ...]:
     """Match debits to credit-transfer instructions by reference AND debtor account.
 
     A match is bookkeeping evidence, not proof of final settlement. Ambiguous references
@@ -21,20 +23,29 @@ def reconcile(payments: Iterable[Payment], entries: Iterable[StatementEntry]) ->
             key = (entry.end_to_end_id, normalize_iban(entry.account_iban))
             by_key[key].append(entry)
     payment_counts = Counter(
-        (p.end_to_end_id, normalize_iban(p.debtor_iban)) for p in payments
+        (p.end_to_end_id, normalize_iban(p.debtor_iban))
+        for p in payments
         if p.end_to_end_id and p.end_to_end_id != "NOTPROVIDED" and p.debtor_iban
     )
     results = []
     for payment in payments:
         key = (payment.end_to_end_id, normalize_iban(payment.debtor_iban))
-        if not payment.end_to_end_id or payment.end_to_end_id == "NOTPROVIDED" or not payment.debtor_iban:
+        if (
+            not payment.end_to_end_id
+            or payment.end_to_end_id == "NOTPROVIDED"
+            or not payment.debtor_iban
+        ):
             results.append(Reconciliation(payment, "UNMATCHABLE_REFERENCE"))
             continue
         candidates = by_key.get(key, [])
         if not candidates:
             results.append(Reconciliation(payment, "NO_BOOKING_FOUND"))
         elif len(candidates) > 1 or payment_counts[key] > 1:
-            results.append(Reconciliation(payment, "AMBIGUOUS_MATCH", detail="Reference is not unique within account"))
+            results.append(
+                Reconciliation(
+                    payment, "AMBIGUOUS_MATCH", detail="Reference is not unique within account"
+                )
+            )
         else:
             entry = candidates[0]
             if payment.amount is None or entry.amount is None:
