@@ -8,7 +8,7 @@ from .iban import IBAN_LENGTHS
 
 def _iban_sql(name: str) -> str:
     """Generate safe SQL using static input names and a hard-coded length registry."""
-    assert name in ("debtor_iban", "creditor_iban")
+    assert name in ("debtor_iban", "creditor_iban", "account_iban")
     iban = f"upper(replace(coalesce(cast(`{name}` as string), ''), ' ', ''))"
     rotated = f"concat(substring({iban}, 5), substring({iban}, 1, 4))"
     ch = f"ascii(substring({rotated}, i, 1))"
@@ -44,12 +44,23 @@ def validate_payments(df, *, profile: str = "sepa_sct"):
         raise ValueError(f"Output columns already exist: {', '.join(sorted(collisions))}")
     from pyspark.sql import functions as F
 
+    from pyspark.sql.types import DoubleType, FloatType
+
+    if isinstance(df.schema["amount"].dataType, (DoubleType, FloatType)):
+        raise ValueError(
+            "Binary floating point amount columns are unsafe for financial data; "
+            "ingest as exact decimal or string"
+        )
+
     amount = F.trim(F.col("amount").cast("string"))
     currency = F.upper(F.trim(F.coalesce(F.col("currency").cast("string"), F.lit(""))))
     reference = F.trim(F.coalesce(F.col("end_to_end_id").cast("string"), F.lit("")))
     # String validation before casting prevents silent numeric rounding to scale=8.
     amount_format_ok = amount.rlike(r"^[0-9]{1,16}(\.[0-9]{1,8})?$")
-    amount_decimal = F.when(amount_format_ok, amount.cast("decimal(24,8)"))
+    amount_decimal = F.when(
+        amount_format_ok,
+        F.expr("try_cast(trim(cast(`amount` as string)) as decimal(24,8))"),
+    )
     invalid_amount = (~amount_format_ok) | amount_decimal.isNull() | (amount_decimal <= 0)
     rules = [
         (reference == "", "MISSING_END_TO_END_ID"),
@@ -93,40 +104,55 @@ def partition_quality(df):
     return df.filter(F.col("dq_valid")), df.filter(~F.col("dq_valid"))
 
 
-def reconcile_spark(payments_df, entries_df):
-    """Conservatively match canonical payments to bank statement entries in Spark.
+def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True):
+    """Conservative bank-entry reconciliation without silently assigning duplicates.
 
-    payments require: payment_id (unique), end_to_end_id, debtor_iban, amount, currency.
-    entries require: entry_id (unique), end_to_end_id, account_iban, amount (signed),
-    currency, status. Optional entry fields: reversal (boolean),
-    bank_transaction_code (e.g. PMNT/ICDT/ARET), transaction_count (int),
-    dq_valid (boolean). Optional payment field: dq_valid (boolean).
-    Unique IDs are a caller invariant; references need not be unique.
-    Aggregating entries BEFORE joining preserves one output row per payment.
+    Emits one result for each input payment row. Physical identifier checks add
+    aggregation shuffles; disable only when upstream uniqueness is enforced in a
+    trusted canonical source contract. EndToEndId is never assumed globally unique.
+
+    Input amounts must be exact decimal or decimal strings, not binary floating
+    point. Invalid lexical amounts become INVALID_AMOUNT even when Spark ANSI
+    semantics are enabled; the job must not fail or round them silently.
     """
     from pyspark.sql import functions as F
+    from pyspark.sql.types import DoubleType, FloatType
 
     pcols = {"payment_id", "end_to_end_id", "debtor_iban", "amount", "currency"}
     ecols = {"entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"}
     if pcols - set(payments_df.columns) or ecols - set(entries_df.columns):
         raise ValueError("Missing payment or statement canonical columns")
+    for frame in (payments_df, entries_df):
+        if isinstance(frame.schema["amount"].dataType, (DoubleType, FloatType)):
+            raise ValueError("Binary floating point financial amounts are unsafe; use Decimal/string")
+
+    def financial_amount(column: str, *, signed: bool):
+        raw = F.trim(F.col(column).cast("string"))
+        pattern = r"^-?[0-9]{1,16}(\\.[0-9]{1,8})?$" if signed else r"^[0-9]{1,16}(\\.[0-9]{1,8})?$"
+        return F.when(
+            raw.rlike(pattern),
+            F.expr(f"try_cast(trim(cast(`{column}` as string)) as decimal(24,8))"),
+        )
+
     p = payments_df.select(
         F.col("payment_id"),
-        F.col("end_to_end_id").alias("ref"),
+        F.trim(F.col("end_to_end_id")).alias("ref"),
         F.upper(F.regexp_replace(F.col("debtor_iban"), " ", "")).alias("account"),
-        F.col("amount").cast("decimal(24,8)").alias("payment_amount"),
-        F.col("currency").alias("payment_currency"),
+        F.expr(_iban_sql("debtor_iban")).alias("account_valid"),
+        F.col("amount").alias("payment_amount_input"),
+        F.upper(F.trim(F.col("currency"))).alias("payment_currency"),
         (F.col("dq_valid") if "dq_valid" in payments_df.columns else F.lit(True)).alias(
             "payment_valid"
         ),
-    )
+    ).withColumn("payment_amount", financial_amount("payment_amount_input", signed=False))
     e = entries_df.select(
         F.col("entry_id"),
-        F.col("end_to_end_id").alias("ref"),
+        F.trim(F.col("end_to_end_id")).alias("ref"),
         F.upper(F.regexp_replace(F.col("account_iban"), " ", "")).alias("account"),
-        F.col("amount").cast("decimal(24,8)").alias("entry_amount"),
-        F.col("currency").alias("entry_currency"),
-        F.col("status").alias("entry_status"),
+        F.expr(_iban_sql("account_iban")).alias("account_valid"),
+        F.col("amount").alias("entry_amount_input"),
+        F.upper(F.trim(F.col("currency"))).alias("entry_currency"),
+        F.upper(F.trim(F.col("status"))).alias("entry_status"),
         (F.col("reversal") if "reversal" in entries_df.columns else F.lit(False)).alias(
             "entry_reversal"
         ),
@@ -141,7 +167,17 @@ def reconcile_spark(payments_df, entries_df):
         (F.col("dq_valid") if "dq_valid" in entries_df.columns else F.lit(True)).alias(
             "entry_valid"
         ),
-    )
+    ).withColumn("entry_amount", financial_amount("entry_amount_input", signed=True))
+
+    if check_id_uniqueness:
+        p_id_counts = p.groupBy("payment_id").agg(F.count("*").alias("payment_id_count"))
+        e_id_counts = e.groupBy("entry_id").agg(F.count("*").alias("entry_id_count"))
+        p = p.join(p_id_counts, "payment_id", "left")
+        e = e.join(e_id_counts, "entry_id", "left")
+    else:
+        p = p.withColumn("payment_id_count", F.lit(1))
+        e = e.withColumn("entry_id_count", F.lit(1))
+
     keys = ["ref", "account"]
     p_counts = p.groupBy(*keys).agg(F.count("*").alias("n_payments"))
     e_counts = e.groupBy(*keys).agg(
@@ -154,6 +190,8 @@ def reconcile_spark(payments_df, entries_df):
         F.min("entry_transaction_count").alias("candidate_transaction_count"),
         F.min("entry_bank_code").alias("candidate_bank_code"),
         F.min("entry_valid").alias("candidate_valid"),
+        F.min("account_valid").alias("candidate_account_valid"),
+        F.max("entry_id_count").alias("max_entry_id_count"),
     )
     joined = p.join(p_counts, keys, "left").join(e_counts, keys, "left")
     matchable = (
@@ -164,35 +202,52 @@ def reconcile_spark(payments_df, entries_df):
         & (F.col("account") != "")
     )
     status = (
-        F.when(~matchable, "UNMATCHABLE_REFERENCE")
-        .when(F.col("n_entries").isNull(), "NO_BOOKING_FOUND")
-        .when((F.col("n_entries") > 1) | (F.col("n_payments") > 1), "AMBIGUOUS_MATCH")
+        F.when(
+            F.col("payment_id").isNull()
+            | (F.trim(F.col("payment_id").cast("string")) == ""),
+            "INVALID_PAYMENT_ID",
+        )
+        .when(F.col("payment_id_count") > 1, "DUPLICATE_PAYMENT_ID")
+        .when(~matchable, "UNMATCHABLE_REFERENCE")
         .when(
             ~F.coalesce(F.col("payment_valid"), F.lit(False))
-            | ~F.coalesce(F.col("candidate_valid"), F.lit(False)),
+            | ~F.coalesce(F.col("account_valid"), F.lit(False)),
+            "INVALID_SOURCE_RECORD",
+        )
+        .when(F.col("payment_amount").isNull() | (F.col("payment_amount") <= 0), "INVALID_AMOUNT")
+        .when(F.col("n_entries").isNull(), "NO_BOOKING_FOUND")
+        .when((F.col("n_entries") > 1) | (F.col("n_payments") > 1), "AMBIGUOUS_MATCH")
+        .when(F.col("max_entry_id_count") > 1, "DUPLICATE_ENTRY_ID")
+        .when(
+            ~F.coalesce(F.col("candidate_valid"), F.lit(False))
+            | ~F.coalesce(F.col("candidate_account_valid"), F.lit(False)),
             "INVALID_SOURCE_RECORD",
         )
         .when(
             F.coalesce(F.col("candidate_transaction_count"), F.lit(1)) > 1,
             "AGGREGATED_ENTRY_NOT_MATCHABLE",
         )
+        .when(F.col("candidate_amount").isNull(), "INVALID_AMOUNT")
         .when(
-            F.col("payment_amount").isNull() | F.col("candidate_amount").isNull(), "INVALID_AMOUNT"
-        )
-        .when(
-            ~F.col("payment_currency").eqNullSafe(F.col("candidate_currency")), "CURRENCY_MISMATCH"
+            ~F.col("payment_currency").eqNullSafe(F.col("candidate_currency")),
+            "CURRENCY_MISMATCH",
         )
         .when(F.col("candidate_amount") >= 0, "DIRECTION_MISMATCH")
         .when(F.col("candidate_amount") != -F.col("payment_amount"), "AMOUNT_MISMATCH")
         .when(F.coalesce(F.col("candidate_reversal"), F.lit(False)), "REVERSAL_REQUIRES_REVIEW")
-        .when(F.col("candidate_bank_code").rlike("/(ARET|RRTN)$"), "RETURN_REQUIRES_REVIEW")
+        .when(
+            F.coalesce(F.col("candidate_bank_code"), F.lit("")).rlike("/(ARET|RRTN)$"),
+            "RETURN_REQUIRES_REVIEW",
+        )
         .when(~F.col("candidate_status").eqNullSafe(F.lit("BOOK")), "NOT_BOOKED")
         .otherwise("MATCHED")
+    )
+    trustworthy_candidate = status.isin(
+        "MATCHED", "AMOUNT_MISMATCH", "CURRENCY_MISMATCH", "DIRECTION_MISMATCH",
+        "REVERSAL_REQUIRES_REVIEW", "RETURN_REQUIRES_REVIEW", "NOT_BOOKED"
     )
     return joined.select(
         "payment_id",
         status.alias("reconciliation_status"),
-        F.when(status != "AMBIGUOUS_MATCH", F.col("candidate_entry_id")).alias(
-            "candidate_entry_id"
-        ),
+        F.when(trustworthy_candidate, F.col("candidate_entry_id")).alias("candidate_entry_id"),
     )
