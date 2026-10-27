@@ -103,12 +103,18 @@ def partition_quality(df):
     return df.filter(F.col("dq_valid")), df.filter(~F.col("dq_valid"))
 
 
-def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True):
+def reconcile_spark(
+    payments_df, entries_df, *, check_id_uniqueness: bool = True,
+    scope_columns: tuple[str, ...] = (),
+):
     """Conservative bank-entry reconciliation without silently assigning duplicates.
 
     Emits one result for each input payment row. Physical identifier checks add
     aggregation shuffles; disable only when upstream uniqueness is enforced in a
     trusted canonical source contract. EndToEndId is never assumed globally unique.
+    Optional scope_columns identify caller-defined *matching cohorts*, such as a bank
+    source and reconciled processing period. Both frames must provide these columns.
+    Never equate requested execution date with bank booking date by default.
 
     Input amounts must be exact decimal or decimal strings, not binary floating
     point. Invalid lexical amounts become INVALID_AMOUNT even when Spark ANSI
@@ -121,6 +127,23 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
     ecols = {"entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"}
     if pcols - set(payments_df.columns) or ecols - set(entries_df.columns):
         raise ValueError("Missing payment or statement canonical columns")
+    if isinstance(scope_columns, str):
+        raise TypeError("scope_columns must be a tuple of shared canonical column names")
+    scope_columns = tuple(scope_columns)
+    reserved = {
+        "ref", "account", "payment_id", "entry_id", "end_to_end_id",
+        "debtor_iban", "account_iban", "creditor_iban", "amount",
+        "currency", "status", "dq_valid",
+    }
+    if (
+        len(set(scope_columns)) != len(scope_columns)
+        or any(not isinstance(c, str) or not c or c in reserved for c in scope_columns)
+    ):
+        raise ValueError("scope_columns must contain distinct, non-reserved names")
+    if any(
+        c not in payments_df.columns or c not in entries_df.columns for c in scope_columns
+    ):
+        raise ValueError("scope_columns must be present in both input DataFrames")
     for frame in (payments_df, entries_df):
         if isinstance(frame.schema["amount"].dataType, (DoubleType, FloatType)):
             raise TypeError("Binary floating point financial amounts are unsafe; use Decimal/string")
@@ -135,6 +158,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
 
     p = payments_df.select(
         F.col("payment_id"),
+        *[F.trim(F.col(c).cast("string")).alias(c) for c in scope_columns],
         F.trim(F.col("end_to_end_id")).alias("ref"),
         F.upper(F.regexp_replace(F.col("debtor_iban"), " ", "")).alias("account"),
         F.expr(_iban_sql("debtor_iban")).alias("account_valid"),
@@ -146,6 +170,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
     ).withColumn("payment_amount", financial_amount("payment_amount_input", signed=False))
     e = entries_df.select(
         F.col("entry_id"),
+        *[F.trim(F.col(c).cast("string")).alias(c) for c in scope_columns],
         F.trim(F.col("end_to_end_id")).alias("ref"),
         F.upper(F.regexp_replace(F.col("account_iban"), " ", "")).alias("account"),
         F.expr(_iban_sql("account_iban")).alias("account_valid"),
@@ -177,10 +202,17 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
         p = p.withColumn("payment_id_count", F.lit(1))
         e = e.withColumn("entry_id_count", F.lit(1))
 
-    keys = ["ref", "account"]
+    keys = ["ref", "account", *scope_columns]
     p_counts = p.groupBy(*keys).agg(F.count("*").alias("n_payments"))
     e_counts = e.groupBy(*keys).agg(
         F.count("*").alias("n_entries"),
+        F.sum(
+            F.when(
+                F.col("entry_id").isNull()
+                | (F.trim(F.col("entry_id").cast("string")) == ""),
+                1,
+            ).otherwise(0)
+        ).alias("missing_entry_ids"),
         F.min("entry_id").alias("candidate_entry_id"),
         F.min("entry_amount").alias("candidate_amount"),
         F.min("entry_currency").alias("candidate_currency"),
@@ -200,6 +232,10 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
         & F.col("account").isNotNull()
         & (F.col("account") != "")
     )
+    scope_usable = F.lit(True)
+    for col in scope_columns:
+        scope_usable = scope_usable & F.col(col).isNotNull() & (F.col(col) != "")
+
     status = (
         F.when(
             F.col("payment_id").isNull()
@@ -207,6 +243,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
             "INVALID_PAYMENT_ID",
         )
         .when(F.col("payment_id_count") > 1, "DUPLICATE_PAYMENT_ID")
+        .when(~scope_usable, "UNMATCHABLE_SCOPE")
         .when(~matchable, "UNMATCHABLE_REFERENCE")
         .when(
             ~F.coalesce(F.col("payment_valid"), F.lit(False))
@@ -216,6 +253,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
         .when(F.col("payment_amount").isNull() | (F.col("payment_amount") <= 0), "INVALID_AMOUNT")
         .when(F.col("n_entries").isNull(), "NO_BOOKING_FOUND")
         .when((F.col("n_entries") > 1) | (F.col("n_payments") > 1), "AMBIGUOUS_MATCH")
+        .when(F.col("missing_entry_ids") > 0, "INVALID_ENTRY_ID")
         .when(F.col("max_entry_id_count") > 1, "DUPLICATE_ENTRY_ID")
         .when(
             ~F.coalesce(F.col("candidate_valid"), F.lit(False))
