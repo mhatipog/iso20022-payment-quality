@@ -43,11 +43,10 @@ def validate_payments(df, *, profile: str = "sepa_sct"):
     if collisions:
         raise ValueError(f"Output columns already exist: {', '.join(sorted(collisions))}")
     from pyspark.sql import functions as F
-
     from pyspark.sql.types import DoubleType, FloatType
 
     if isinstance(df.schema["amount"].dataType, (DoubleType, FloatType)):
-        raise ValueError(
+        raise TypeError(
             "Binary floating point amount columns are unsafe for financial data; "
             "ingest as exact decimal or string"
         )
@@ -124,7 +123,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
         raise ValueError("Missing payment or statement canonical columns")
     for frame in (payments_df, entries_df):
         if isinstance(frame.schema["amount"].dataType, (DoubleType, FloatType)):
-            raise ValueError("Binary floating point financial amounts are unsafe; use Decimal/string")
+            raise TypeError("Binary floating point financial amounts are unsafe; use Decimal/string")
 
     def financial_amount(column: str, *, signed: bool):
         raw = F.trim(F.col(column).cast("string"))
