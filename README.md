@@ -212,6 +212,41 @@ idempotent merge key; a Python hash alone **does not** deliver exactly-once sema
 - Avoid logging raw XML, transaction references and account identifiers in production;
   store quarantine rows with your organization's RBAC, retention and encryption rules.
 
+## Independent migration acceptance gate
+
+When migrating a banking data flow, a successful parse and a matched subset
+do **not** prove completeness. The opt-in `assess_migration_gate` compares
+accepted instructions, statement entries and exact monetary sums with a
+**separately sourced inventory of expected counts and totals**. Any quarantined
+payment, unaccounted bank entry, amount mismatch, return, reversal or pending
+booking blocks the gate. It emits only redacted totals and reason codes.
+
+```python
+from decimal import Decimal
+from iso20022_quality import MigrationControls, assess_migration_gate
+
+independent = MigrationControls(
+    reference="AUDIT-SOURCE-EXPORT-2026-10",
+    payment_count=1000, payment_total=Decimal("125000.00"),
+    statement_entry_count=1000, statement_debit_total=Decimal("125000.00"),
+)
+result = assess_migration_gate(parsed_payment_files, parsed_statements, independent)
+assert result.decision == "PASS_TECHNICAL_CHECKS"
+```
+
+**Do not calculate the expected controls from the same ISO documents being
+checked**: that would give circular reassurance. The statement population must
+be pre-scoped to the relevant payment cohort; unrelated bank fees or account
+movements must be separately accounted for. PASS is a **technical consistency
+result, not approval to move money, settlement certainty, EPC compliance or
+a production cutover authorization**.
+
+Run `python examples/migration_acceptance.py` for a synthetic demonstration of
+a failed gate and a corrected example. This bounded Python API is appropriate
+for file-size-limited validation and integration tests; the 1M-row Spark
+benchmarks apply to separate canonical-table reconciliation, **not** to this
+in-memory gate.
+
 ## Reproducible Spark benchmarks
 
 A documented [100k–1m synthetic reconciliation benchmark](docs/benchmarks.md)
