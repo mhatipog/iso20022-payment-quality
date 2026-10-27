@@ -173,7 +173,7 @@ def test_bank_side_amount_error_and_missing_booking_block():
 
 
 def test_missing_inputs_never_pass_vacuously():
-    file, statement, controls = fixture()
+    _, _, controls = fixture()
     result = assess_migration_gate([], [], controls)
     assert result.decision == "BLOCKED"
     assert "MISSING_SOURCE_EVIDENCE" in result.blocking_codes
