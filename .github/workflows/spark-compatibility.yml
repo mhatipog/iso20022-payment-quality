@@ -1,0 +1,35 @@
+name: Spark version compatibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/spark-version-matrix]
+permissions:
+  contents: read
+jobs:
+  spark:
+    name: Spark ${{ matrix.spark }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        spark: ['3.4.4', '3.5.9', '4.2.0']
+    env:
+      SPARK_LOCAL_IP: '127.0.0.1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install fixed Spark version
+        run: |
+          python -m pip install -e '.[dev]'
+          python -m pip install "pyspark==${{ matrix.spark }}"
+      - name: Show exact versions
+        run: python -c "import sys,pyspark; print('Python:',sys.version); print('PySpark:',pyspark.__version__)"
+      - name: Run Spark interoperability and payment safety regression suite
+        run: pytest -q tests/test_spark_optional.py
