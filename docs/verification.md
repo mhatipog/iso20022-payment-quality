@@ -48,6 +48,31 @@ The [publishing checklist](../PUBLISHING.md) describes tagging and release
 verification. A tagged release or PyPI package should not be inferred from
 a source branch or successful wheel build.
 
+## Independent public-example compatibility — validated 27 October 2026
+
+Four pinned **third-party synthetic** `pain.001.001.09` XML examples from
+[sebastienrousseau/pain001](https://github.com/sebastienrousseau/pain001)
+were fetched at commit `eef56caf0c93cee277cacce6f93181b4518b8669`.
+The validation script verified the upstream provenance SHA-256 digest,
+compared record counts and independent XML control sums with parsed outputs,
+and recorded zero parser record errors (5 payments total) for CH, CZ,
+DE and SE scenarios.
+
+[Execution evidence](https://github.com/mhatipog/iso20022-payment-quality/actions/runs/40537823589)
+(the external-corpus job passed; unrelated branch-lint job was superseded).
+
+Re-run from the repository after installing dependencies:
+
+```bash
+python examples/external_corpus_validation.py
+```
+
+Or run the manually triggered
+[Independent ISO example check](../.github/workflows/external-corpus.yml).
+It fetches publicly licensed upstream example files when internet access is
+available. It is **not** production bank data, complete XSD/EPC
+conformance, a settlement assertion or a substitute for institution tests.
+
 ## Expensive or network-dependent checks
 
 - [Spark scale workflow](../.github/workflows/benchmark-scale.yml) is manually
