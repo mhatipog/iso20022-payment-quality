@@ -4,9 +4,9 @@ Run from the project root:
     python examples/migration_acceptance.py
 No real customer, bank or source-system data are used.
 """
+import json
 from dataclasses import asdict, replace
 from decimal import Decimal
-import json
 from pathlib import Path
 
 from iso20022_quality import (
