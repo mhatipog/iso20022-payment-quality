@@ -37,7 +37,7 @@ def main():
     for path, expected_rows in SAMPLES.items():
         sample = fetch(BASE + path)
         provenance = fetch(BASE + path.removesuffix(".xml") + ".provenance.yaml").decode("utf-8")
-        declared_hash = re.search(r"(?m)^sha256:\\s*([a-f0-9]{64})\\s*$", provenance)
+        declared_hash = re.search(r"(?m)^sha256:\s*([a-f0-9]{64})\s*$", provenance)
         if not declared_hash:
             raise AssertionError("Missing independent provenance digest: " + path)
         if hashlib.sha256(sample).hexdigest() != declared_hash.group(1):
