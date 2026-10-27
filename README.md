@@ -212,6 +212,15 @@ idempotent merge key; a Python hash alone **does not** deliver exactly-once sema
 - Avoid logging raw XML, transaction references and account identifiers in production;
   store quarantine rows with your organization's RBAC, retention and encryption rules.
 
+## Reproducible Spark benchmarks
+
+A documented [100k–1m synthetic reconciliation benchmark](docs/benchmarks.md)
+includes a repeated clean workload and an adversarial workload with reused
+references, missing entry identifiers, returns and reversals. GitHub Actions
+reproduces the exact result counts. These are **Spark SQL canonical-table
+measurements**, not XML/XSD ingestion, Delta writes, bank-file conformance,
+or an Azure Databricks production SLA.
+
 ## Development
 
 ```bash

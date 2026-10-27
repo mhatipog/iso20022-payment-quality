@@ -38,7 +38,7 @@ Timing varies significantly run-to-run; a repeated 100,000-row run took 0.515 s.
 
 Additional XML extraction tests (synthetic pain.001.001.09, no XSD): 1,000 transactions in 0.027 s; 10,000 transactions in 0.307 s. These were run with a standalone local generator, not part of the published benchmark script.
 
-**No verified 1–10 million row Spark/Databricks throughput or cost benchmark exists yet.** It would be misleading to infer large-scale distributed performance from the local Python measurements.
+**A verified 1-million-row synthetic Spark reconciliation benchmark now exists**, with both unique-reference and deliberately skewed/error-injected scenarios. See [results, runner configuration and raw CI logs](benchmarks.md). No Azure Databricks cluster, 10-million-row test, distributed cloud I/O, production data or end-to-end cost benchmark has been validated. Do not extrapolate the local Python timings to production throughput.
 
 ## Verification/acceptance plan
 
