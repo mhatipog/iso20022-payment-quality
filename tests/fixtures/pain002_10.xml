@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.002.001.10">
+  <CstmrPmtStsRpt>
+    <GrpHdr><MsgId>STATUS-2026-0001</MsgId><CreDtTm>2026-10-27T10:00:00Z</CreDtTm><InitgPty><Nm>Example Bank</Nm></InitgPty></GrpHdr>
+    <OrgnlGrpInfAndSts><OrgnlMsgId>PAYMENTS-2026-0001</OrgnlMsgId><OrgnlMsgNmId>pain.001.001.09</OrgnlMsgNmId><GrpSts>PART</GrpSts></OrgnlGrpInfAndSts>
+    <OrgnlPmtInfAndSts>
+      <OrgnlPmtInfId>BATCH-001</OrgnlPmtInfId><PmtInfSts>PART</PmtInfSts>
+      <TxInfAndSts><OrgnlInstrId>ORDER-1</OrgnlInstrId><OrgnlEndToEndId>INV-1001</OrgnlEndToEndId><TxSts>ACCP</TxSts></TxInfAndSts>
+      <TxInfAndSts><OrgnlInstrId>ORDER-2</OrgnlInstrId><OrgnlEndToEndId>INV-1002</OrgnlEndToEndId><TxSts>RJCT</TxSts><StsRsnInf><Rsn><Cd>AC01</Cd></Rsn></StsRsnInf></TxInfAndSts>
+    </OrgnlPmtInfAndSts>
+  </CstmrPmtStsRpt>
+</Document>

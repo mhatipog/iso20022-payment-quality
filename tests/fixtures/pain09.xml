@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>TEST-MSG-2026-001</MsgId>
+      <CreDtTm>2026-10-26T14:30:00</CreDtTm>
+      <NbOfTxs>3</NbOfTxs>
+      <CtrlSum>170.00</CtrlSum>
+      <InitgPty><Nm>Demo Payments Ltd</Nm></InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>DEMO-BATCH-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <NbOfTxs>3</NbOfTxs>
+      <CtrlSum>170.00</CtrlSum>
+      <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>
+      <ReqdExctnDt><Dt>2026-10-28</Dt></ReqdExctnDt>
+      <Dbtr><Nm>Demo Payments Ltd</Nm></Dbtr>
+      <DbtrAcct><Id><IBAN>BE68539007547034</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>GEBABEBB</BICFI></FinInstnId></DbtrAgt>
+      <ChrgBr>SLEV</ChrgBr>
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>DEMO-E2E-001</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">100.00</InstdAmt></Amt>
+        <Cdtr><Nm>Supplier A</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>NL91ABNA0417164300</IBAN></Id></CdtrAcct>
+      </CdtTrfTxInf>
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>DEMO-E2E-002</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">50.00</InstdAmt></Amt>
+        <Cdtr><Nm>Supplier B</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>NL91ABNA0417164300</IBAN></Id></CdtrAcct>
+      </CdtTrfTxInf>
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>DEMO-E2E-003</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">20.00</InstdAmt></Amt>
+        <Cdtr><Nm>Supplier C</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>NL91ABNA0417164300</IBAN></Id></CdtrAcct>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

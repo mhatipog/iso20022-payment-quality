@@ -7,7 +7,7 @@ legacy payment rows do not reconcile with bank statements, prevent silent ingest
 bad values, and account for duplicates, inconsistent identifiers and scheme versions.
 This package provides a conservative **operational quality layer** for those pipelines.
 
-**Status:** experimental v0.1.0. Not certified for sending SEPA payments or accepting
+**Status:** experimental v0.2.1. Not certified for sending SEPA payments or accepting
 production financial instructions. All fixtures are synthetic; no confidential bank data.
 
 ## What is implemented
@@ -19,6 +19,8 @@ production financial instructions. All fixtures are synthetic; no confidential b
 - Check IBAN mod-97 and registered country lengths (known-country table; generic fallback),
   amount formatting, three-letter currency-code shape (not full ISO 4217 registry), EUR-only
   SEPA operational profile and decimal precision.
+- Detect exact replay of previously ingested files or conflicting content under the same
+  business message ID (caller-managed receipt ledger).
 - Read **`pain.002.001.10`** status reports (`ACCP`, `RJCT`, `PDNG`, etc.), retain
   bank reason codes, and link transaction-level observations to instructions without
   guessing a final settlement state.
@@ -168,6 +170,13 @@ to **complement**, not replace, an XML/XSD library.
 5. Deduplication/idempotence, schema evolution and partition-aware benchmarks with
    measured Spark runtimes on a supported Databricks runtime.
 6. XML batches >16 MiB via controlled streaming ingestion and multi-file orchestration.
+
+## Ingestion idempotency
+
+Use `file_receipt` and `detect_replays` with a database-backed receipt ledger to
+recognize exact replays and conflicting replacement payloads before Silver writes.
+The receipt ledger and Silver/Quarantine writes must share an atomic transaction or
+idempotent merge key; a Python hash alone **does not** deliver exactly-once semantics.
 
 ## Privacy and security
 
