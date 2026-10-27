@@ -69,6 +69,13 @@ def _text(node: Element | None, path: str, ns: str) -> str:
 
 
 def _decimal(raw: str) -> Decimal | None:
+    """Accept XML decimal lexical values; never interpret exponent/signed shortcuts.
+
+    A bank amount's debit/credit sign is conveyed separately through CdtDbtInd.
+    Decimal() itself accepts 1E3, +1 and -0, which are not valid here.
+    """
+    if not re.fullmatch(r"[0-9]+(?:\\.[0-9]+)?", raw):
+        return None
     try:
         num = Decimal(raw)
         return num if num.is_finite() else None
