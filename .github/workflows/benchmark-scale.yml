@@ -1,0 +1,56 @@
+name: Synthetic Spark scale benchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [bench/large-synthetic-spark]
+permissions:
+  contents: read
+concurrency:
+  group: iso20022-spark-scale-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  spark-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install tested Spark dependencies
+        run: python -m pip install -e '.[spark]'
+      - name: Reproduce and verify scale measurements
+        env:
+          SPARK_LOCAL_IP: '127.0.0.1'
+        run: |
+          python - <<'PY'
+          import json
+          from pyspark.sql import SparkSession
+          from benchmarks.spark_reconciliation import run
+
+          spark = (
+              SparkSession.builder.master("local[2]")
+              .appName("iso20022-public-benchmark")
+              .config("spark.sql.shuffle.partitions", "8")
+              .config("spark.ui.enabled", "false")
+              .config("spark.sql.adaptive.enabled", "true")
+              .getOrCreate()
+          )
+          try:
+              measurements = [
+                  run(spark, 20000, check_id_uniqueness=True),
+                  run(spark, 100000, check_id_uniqueness=True),
+                  run(spark, 100000, check_id_uniqueness=False),
+                  run(spark, 1000000, check_id_uniqueness=True),
+              ]
+              print("BENCHMARK_JSON_START")
+              for item in measurements:
+                  print(json.dumps(item, sort_keys=True))
+              print("BENCHMARK_JSON_END")
+          finally:
+              spark.stop()
+          PY
