@@ -104,6 +104,21 @@ def assess_migration_gate(
     ):
         reasons.add("STATEMENT_QUALITY_ERROR")
 
+    # EndToEndId/amount/account alone cannot prove the identity of each bank
+    # entry. ISO statements can omit NtryRef; callers must provide a stable,
+    # source-derived canonical entry identity before migration acceptance.
+    # NtryRef is unique only within its statement, not across all statements.
+    evidence_keys = [
+        (entry.statement_id.strip(), entry.entry_reference.strip())
+        for entry in entries
+        if entry.statement_id and entry.entry_reference
+        and entry.statement_id.strip() and entry.entry_reference.strip()
+    ]
+    if len(evidence_keys) != len(entries):
+        reasons.add("MISSING_STATEMENT_ENTRY_ID")
+    if any(count > 1 for count in Counter(evidence_keys).values()):
+        reasons.add("DUPLICATE_STATEMENT_ENTRY_ID")
+
     if len(payments) != controls.payment_count:
         reasons.add("SOURCE_PAYMENT_COUNT_MISMATCH")
     if len(entries) != controls.statement_entry_count:

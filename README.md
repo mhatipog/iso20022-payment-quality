@@ -58,7 +58,8 @@ report = assess_migration_gate(parsed_payment_files, parsed_statements, controls
 print(report.decision, report.blocking_codes)
 ```
 
-The gate fails closed on quarantined records, unaccounted statement entries, incorrect totals, and unresolved reconciliation outcomes. `PASS_TECHNICAL_CHECKS` **does not authorize a production migration, payment release or settlement claim**. The source controls' true independence and cohort completeness must be established outside the library.
+The gate fails closed on quarantined records, unaccounted statement entries, incorrect totals, and unresolved reconciliation outcomes.
+The gate also requires unique, nonblank canonical bank-entry evidence references scoped by statement. If a bank message omits an entry reference, create an audited, deterministic source-derived identity during canonicalization; never use a random retry-dependent ID. `PASS_TECHNICAL_CHECKS` **does not authorize a production migration, payment release or settlement claim**. The source controls' true independence and cohort completeness must be established outside the library.
 
 ## Spark and Databricks
 
