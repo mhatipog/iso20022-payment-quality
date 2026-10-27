@@ -178,3 +178,27 @@ def test_reject_floating_point_financial_columns(spark):
     )
     with pytest.raises(TypeError, match="floating point"):
         validate_payments(df)
+
+
+def test_exact_spark_decimal_padding_and_excess_precision(spark):
+    from decimal import Decimal
+
+    values = spark.createDataFrame(
+        [
+            ("P1", "R1", "BE68539007547034", "NL91ABNA0417164300",
+             Decimal("12.500000000000000000"), "EUR"),
+            ("P2", "R2", "BE68539007547034", "NL91ABNA0417164300",
+             Decimal("12.501000000000000000"), "EUR"),
+        ],
+        ["payment_id", "end_to_end_id", "debtor_iban", "creditor_iban", "amount", "currency"],
+    )
+    quality = {r.payment_id: r.dq_valid for r in validate_payments(values).collect()}
+    assert quality == {"P1": True, "P2": False}
+
+    entries = spark.createDataFrame(
+        [("E1", "R1", "BE68539007547034", "-12.50", "EUR", "BOOK")],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"],
+    )
+    results = {r.payment_id: r.reconciliation_status
+               for r in reconcile_spark(values, entries).collect()}
+    assert results == {"P1": "MATCHED", "P2": "INVALID_AMOUNT"}
