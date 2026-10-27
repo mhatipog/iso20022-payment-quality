@@ -55,7 +55,7 @@ def validate_payments(df, *, profile: str = "sepa_sct"):
     currency = F.upper(F.trim(F.coalesce(F.col("currency").cast("string"), F.lit(""))))
     reference = F.trim(F.coalesce(F.col("end_to_end_id").cast("string"), F.lit("")))
     # String validation before casting prevents silent numeric rounding to scale=8.
-    amount_format_ok = amount.rlike(r"^[0-9]{1,16}(\.[0-9]{1,8})?$")
+    amount_format_ok = amount.rlike(r"^[0-9]{1,16}(\.[0-9]{1,8}0*)?$")
     amount_decimal = F.when(
         amount_format_ok,
         F.expr("try_cast(trim(cast(`amount` as string)) as decimal(24,8))"),
@@ -71,7 +71,7 @@ def validate_payments(df, *, profile: str = "sepa_sct"):
             (currency != "EUR", "SEPA_NON_EUR"),
             (~F.expr(_iban_sql("debtor_iban")), "INVALID_DEBTOR_IBAN"),
             (~F.expr(_iban_sql("creditor_iban")), "INVALID_CREDITOR_IBAN"),
-            (amount.rlike(r"\.[0-9]{3,}$"), "SEPA_AMOUNT_FRACTION"),
+            (~amount.rlike(r"^[0-9]{1,16}(\.[0-9]{1,2}0*)?$"), "SEPA_AMOUNT_FRACTION"),
         ]
     else:
         for col, code in [
@@ -127,7 +127,7 @@ def reconcile_spark(payments_df, entries_df, *, check_id_uniqueness: bool = True
 
     def financial_amount(column: str, *, signed: bool):
         raw = F.trim(F.col(column).cast("string"))
-        pattern = r"^-?[0-9]{1,16}(\.[0-9]{1,8})?$" if signed else r"^[0-9]{1,16}(\.[0-9]{1,8})?$"
+        pattern = r"^-?[0-9]{1,16}(\.[0-9]{1,8}0*)?$" if signed else r"^[0-9]{1,16}(\.[0-9]{1,8}0*)?$"
         return F.when(
             raw.rlike(pattern),
             F.expr(f"try_cast(trim(cast(`{column}` as string)) as decimal(24,8))"),
