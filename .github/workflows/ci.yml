@@ -8,6 +8,7 @@ on:
   pull_request:
 permissions:
   contents: read
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -19,11 +20,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -e '.[dev]'
-      - run: ruff check src tests examples
-      - run: pytest -q
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Verify offline examples, Python tests and coverage
+        run: python scripts/verify.py
+      - name: Publish coverage evidence
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-core-coverage
+          path: coverage.xml
+      - name: Build an isolated wheel and smoke-test imports/CLI
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m build --wheel
+          python -m venv /tmp/iso20022-wheel-check
+          /tmp/iso20022-wheel-check/bin/python -m pip install dist/*.whl
+          (cd /tmp && /tmp/iso20022-wheel-check/bin/python -c "from importlib.metadata import version; from iso20022_quality import MigrationControls, assess_migration_gate; assert version('iso20022-payment-quality') == '0.3.0'; print('isolated wheel import OK')")
+          (cd /tmp && /tmp/iso20022-wheel-check/bin/iso20022-quality --help > /dev/null)
+
   spark-integration:
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
