@@ -11,15 +11,27 @@ requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [{name = "Metin Hatipogullari"}]
 keywords = ["ISO 20022", "SEPA", "PySpark", "Databricks", "reconciliation", "banking"]
-classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3 :: Only", "Topic :: Office/Business :: Financial :: Accounting", "License :: OSI Approved :: Apache Software License"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business :: Financial :: Accounting",
+    "License :: OSI Approved :: Apache Software License",
+]
 dependencies = ["defusedxml>=0.7.1,<1"]
+
+[project.urls]
+Homepage = "https://github.com/mhatipog/iso20022-payment-quality"
+Repository = "https://github.com/mhatipog/iso20022-payment-quality"
+Documentation = "https://github.com/mhatipog/iso20022-payment-quality#readme"
+Issues = "https://github.com/mhatipog/iso20022-payment-quality/issues"
 
 [project.scripts]
 iso20022-quality = "iso20022_quality.cli:main"
 
 [project.optional-dependencies]
 spark = ["pyspark>=3.4,<5"]
-dev = ["pytest>=8", "ruff>=0.6", "build>=1"]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "build>=1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -30,3 +42,11 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.coverage.run]
+source = ["iso20022_quality"]
+omit = ["*/iso20022_quality/spark.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
