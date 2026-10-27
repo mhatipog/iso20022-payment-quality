@@ -4,10 +4,10 @@ Only downloads public Apache-2.0 licensed synthetic examples from a PINNED
 GitHub commit. Never sends local payment data to any external service.
 This is NOT a validation against real bank production records or ISO XSD.
 """
-from decimal import Decimal
 import hashlib
 import json
 import re
+from decimal import Decimal
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree as ET
 
