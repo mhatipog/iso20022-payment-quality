@@ -46,3 +46,36 @@ Additional XML extraction tests (synthetic pain.001.001.09, no XSD): 1,000 trans
 - Offline: controlled and privacy-safe scenarios, XSD coverage, schema evolution and replay tests.
 - Data-platform scale: 100k, 1M and 10M synthetic data, at least two realistic key-skew patterns, forced shuffles and strict/no-duplicate variants. Record Spark/DBR runtime, executors, partition sizes, shuffle read/write bytes, spill, job duration, error rate, and financial reconciliation counts.
 - Only then call the particular supported version and workload *production validated* for that deployment.
+
+
+## Reconciliation across banks and processing periods
+
+`reconcile_spark` defaults to matching on EndToEndId and debtor account, with
+conservative ambiguity detection. The same pair may legitimately be reused
+across separate imports, bank relationships or periods. Do not force a match
+by choosing one arbitrary statement row.
+
+Where the ingestion system creates a **shared, validated reconciliation
+cohort** in both inputs, pass `scope_columns=("reconciliation_cohort",)`.
+For example, a cohort can represent a carefully bounded bank relationship,
+reconciliation run and authorized processing window:
+
+```python
+from iso20022_quality.spark import reconcile_spark
+
+outcome = reconcile_spark(
+    canonical_payments,
+    canonical_entries,
+    scope_columns=("reconciliation_cohort",),
+)
+```
+
+Null/blank cohort keys yield `UNMATCHABLE_SCOPE`. Missing or blank bank-entry
+identifiers yield `INVALID_ENTRY_ID`, not `MATCHED`. Reused physical
+identifiers are marked as duplicates when `check_id_uniqueness=True`.
+Cohorts must be consistently derived and audited upstream. Do **not** equate
+requested execution date with booking date; bank value dates, booking dates,
+cutoffs and holidays differ.
+
+The function does not establish an end-to-end audit ledger, conditional
+exactly-once ingest, temporal matching windows, or regulatory compliance.
