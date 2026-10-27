@@ -176,5 +176,5 @@ def test_reject_floating_point_financial_columns(spark):
         [("BE68539007547034", "NL91ABNA0417164300", 12.5, "EUR", "REF1")],
         ["debtor_iban", "creditor_iban", "amount", "currency", "end_to_end_id"],
     )
-    with pytest.raises(ValueError, match="floating point"):
+    with pytest.raises(TypeError, match="floating point"):
         validate_payments(df)
