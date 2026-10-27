@@ -31,6 +31,7 @@ jobs:
           import json
           from pyspark.sql import SparkSession
           from benchmarks.spark_reconciliation import run
+          from benchmarks.spark_adversarial import run as run_adversarial
 
           spark = (
               SparkSession.builder.master("local[2]")
@@ -46,6 +47,8 @@ jobs:
                   run(spark, 100000, check_id_uniqueness=True),
                   run(spark, 100000, check_id_uniqueness=False),
                   run(spark, 1000000, check_id_uniqueness=True),
+                  run_adversarial(spark, 100000),
+                  run_adversarial(spark, 1000000),
               ]
               print("BENCHMARK_JSON_START")
               for item in measurements:
