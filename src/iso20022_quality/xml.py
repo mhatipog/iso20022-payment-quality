@@ -74,7 +74,7 @@ def _decimal(raw: str) -> Decimal | None:
     A bank amount's debit/credit sign is conveyed separately through CdtDbtInd.
     Decimal() itself accepts 1E3, +1 and -0, which are not valid here.
     """
-    if not re.fullmatch(r"[0-9]+(?:\\.[0-9]+)?", raw):
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", raw):
         return None
     try:
         num = Decimal(raw)
