@@ -1,4 +1,7 @@
 name: tests
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   workflow_dispatch:
   push:
@@ -33,6 +36,9 @@ jobs:
           java-version: '17'
       - run: python -m pip install -e '.[spark,dev]'
       - run: pytest -q tests/test_spark_optional.py
+      - name: Verify 20k Spark reconciliation benchmark
+        run: |
+          python -c "from pyspark.sql import SparkSession; from benchmarks.spark_reconciliation import run; s=SparkSession.builder.master('local[2]').config('spark.sql.shuffle.partitions','4').appName('banking-ci-bench').getOrCreate(); print(run(s, 20000)); s.stop()"
 
   public-bank-compatibility:
     if: github.event_name == 'workflow_dispatch'

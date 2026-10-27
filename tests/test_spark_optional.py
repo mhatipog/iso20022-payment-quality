@@ -112,3 +112,93 @@ def test_spark_refuses_reversals_returns_and_bad_input(spark):
         "P3": "INVALID_SOURCE_RECORD",
         "P4": "AGGREGATED_ENTRY_NOT_MATCHABLE",
     }
+
+
+def test_ansi_mode_invalid_amounts_quarantine_not_crash(spark):
+    from pyspark.sql import functions as F
+
+    previous = spark.conf.get("spark.sql.ansi.enabled", "false")
+    spark.conf.set("spark.sql.ansi.enabled", "true")
+    try:
+        p = spark.createDataFrame(
+            [
+                ("P1", "BAD", "BE68539007547034", "not-a-decimal", "EUR"),
+                ("P2", "OVERFLOW", "BE68539007547034", "999999999999999999999", "EUR"),
+                ("P3", "GOOD", "BE68539007547034", "12.50", "EUR"),
+            ],
+            ["payment_id", "end_to_end_id", "debtor_iban", "amount", "currency"],
+        )
+        e = spark.createDataFrame(
+            [
+                ("E1", "BAD", "BE68539007547034", "-12.50", "EUR", "BOOK"),
+                ("E2", "OVERFLOW", "BE68539007547034", "-12.50", "EUR", "BOOK"),
+                ("E3", "GOOD", "BE68539007547034", "-12.50", "EUR", "BOOK"),
+            ],
+            ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"],
+        )
+        results = {r.payment_id: r.reconciliation_status for r in reconcile_spark(p, e).collect()}
+        assert results == {"P1": "INVALID_AMOUNT", "P2": "INVALID_AMOUNT", "P3": "MATCHED"}
+
+        v = p.withColumn("creditor_iban", F.lit("NL91ABNA0417164300"))
+        quality = {r.payment_id: r.dq_valid for r in validate_payments(v).collect()}
+        assert quality == {"P1": False, "P2": False, "P3": True}
+    finally:
+        spark.conf.set("spark.sql.ansi.enabled", previous)
+
+
+def test_duplicate_physical_identifiers_never_silently_match(spark):
+    p = spark.createDataFrame(
+        [
+            ("P1", "REF1", "BE68539007547034", "10.00", "EUR"),
+            ("P1", "REF2", "BE68539007547034", "11.00", "EUR"),
+            ("P3", "REF3", "BE68539007547034", "12.00", "EUR"),
+            ("P4", "REF4", "BE68539007547034", "13.00", "EUR"),
+        ],
+        ["payment_id", "end_to_end_id", "debtor_iban", "amount", "currency"],
+    )
+    e = spark.createDataFrame(
+        [
+            ("E1", "REF1", "BE68539007547034", "-10.00", "EUR", "BOOK"),
+            ("E2", "REF2", "BE68539007547034", "-11.00", "EUR", "BOOK"),
+            ("E3", "REF3", "BE68539007547034", "-12.00", "EUR", "BOOK"),
+            ("E3", "REF4", "BE68539007547034", "-13.00", "EUR", "BOOK"),
+        ],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"],
+    )
+    rows = reconcile_spark(p, e).collect()
+    assert len(rows) == 4
+    assert sum(r.reconciliation_status == "DUPLICATE_PAYMENT_ID" for r in rows) == 2
+    assert sum(r.reconciliation_status == "DUPLICATE_ENTRY_ID" for r in rows) == 2
+
+
+def test_reject_floating_point_financial_columns(spark):
+    df = spark.createDataFrame(
+        [("BE68539007547034", "NL91ABNA0417164300", 12.5, "EUR", "REF1")],
+        ["debtor_iban", "creditor_iban", "amount", "currency", "end_to_end_id"],
+    )
+    with pytest.raises(TypeError, match="floating point"):
+        validate_payments(df)
+
+
+def test_exact_spark_decimal_padding_and_excess_precision(spark):
+    from decimal import Decimal
+
+    values = spark.createDataFrame(
+        [
+            ("P1", "R1", "BE68539007547034", "NL91ABNA0417164300",
+             Decimal("12.500000000000000000"), "EUR"),
+            ("P2", "R2", "BE68539007547034", "NL91ABNA0417164300",
+             Decimal("12.500000001000000000"), "EUR"),
+        ],
+        ["payment_id", "end_to_end_id", "debtor_iban", "creditor_iban", "amount", "currency"],
+    )
+    quality = {r.payment_id: r.dq_valid for r in validate_payments(values).collect()}
+    assert quality == {"P1": True, "P2": False}
+
+    entries = spark.createDataFrame(
+        [("E1", "R1", "BE68539007547034", "-12.50", "EUR", "BOOK")],
+        ["entry_id", "end_to_end_id", "account_iban", "amount", "currency", "status"],
+    )
+    results = {r.payment_id: r.reconciliation_status
+               for r in reconcile_spark(values, entries).collect()}
+    assert results == {"P1": "MATCHED", "P2": "INVALID_AMOUNT"}

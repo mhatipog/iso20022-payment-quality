@@ -7,8 +7,21 @@ legacy payment rows do not reconcile with bank statements, prevent silent ingest
 bad values, and account for duplicates, inconsistent identifiers and scheme versions.
 This package provides a conservative **operational quality layer** for those pipelines.
 
-**Status:** experimental v0.2.1. Not certified for sending SEPA payments or accepting
+**Status:** experimental v0.3.0. Not certified for sending SEPA payments or accepting
 production financial instructions. All fixtures are synthetic; no confidential bank data.
+
+## Production engineering evidence
+
+This release adds ANSI-safe financial amount validation, duplicate physical identifier
+checks, ambiguity-safe status linking, and conservative treatment of returns/reversals.
+Exact padded Spark decimals are accepted without rounding over-precise values.
+
+- [Production gates, known limitations and reproducible measurements](docs/production-readiness.md)
+- [Synthetic Python reconciliation harness](benchmarks/reconciliation.py)
+- [Synthetic native Spark benchmark](benchmarks/spark_reconciliation.py)
+
+These tests do **not** prove full EPC conformance or production settlement correctness.
+Use official XSD/EPC TVS and institution-specific validation in addition to this package.
 
 ## What is implemented
 

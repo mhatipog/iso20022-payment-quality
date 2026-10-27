@@ -38,7 +38,9 @@ def reconcile(
             results.append(Reconciliation(payment, "UNMATCHABLE_REFERENCE"))
             continue
         candidates = by_key.get(key, [])
-        if not candidates:
+        if any(d.level == "error" for d in payment.issues):
+            results.append(Reconciliation(payment, "INVALID_SOURCE_RECORD"))
+        elif not candidates:
             results.append(Reconciliation(payment, "NO_BOOKING_FOUND"))
         elif len(candidates) > 1 or payment_counts[key] > 1:
             results.append(
@@ -50,6 +52,10 @@ def reconcile(
             entry = candidates[0]
             if payment.amount is None or entry.amount is None:
                 status = "INVALID_AMOUNT"
+            elif any(d.level == "error" for d in entry.issues):
+                status = "INVALID_SOURCE_RECORD"
+            elif entry.transaction_count > 1:
+                status = "AGGREGATED_ENTRY_NOT_MATCHABLE"
             elif payment.currency != entry.currency:
                 status = "CURRENCY_MISMATCH"
             elif entry.amount >= Decimal(0):
@@ -58,12 +64,11 @@ def reconcile(
                 status = "AMOUNT_MISMATCH"
             elif entry.reversal or "REVERSAL_REQUIRES_REVIEW" in {d.code for d in entry.issues}:
                 status = "REVERSAL_REQUIRES_REVIEW"
-            elif "RETURN_REQUIRES_REVIEW" in {d.code for d in entry.issues}:
+            elif ("RETURN_REQUIRES_REVIEW" in {d.code for d in entry.issues} or
+                  entry.bank_transaction_code.endswith(("/ARET", "/RRTN"))):
                 status = "RETURN_REQUIRES_REVIEW"
             elif entry.status != "BOOK":
                 status = "NOT_BOOKED"
-            elif any(d.level == "error" for d in entry.issues + payment.issues):
-                status = "INVALID_SOURCE_RECORD"
             else:
                 status = "MATCHED"
             results.append(Reconciliation(payment, status, entry))
