@@ -188,7 +188,7 @@ def test_exact_spark_decimal_padding_and_excess_precision(spark):
             ("P1", "R1", "BE68539007547034", "NL91ABNA0417164300",
              Decimal("12.500000000000000000"), "EUR"),
             ("P2", "R2", "BE68539007547034", "NL91ABNA0417164300",
-             Decimal("12.501000000000000000"), "EUR"),
+             Decimal("12.500000001000000000"), "EUR"),
         ],
         ["payment_id", "end_to_end_id", "debtor_iban", "creditor_iban", "amount", "currency"],
     )
