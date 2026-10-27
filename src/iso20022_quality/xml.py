@@ -135,9 +135,15 @@ def parse_pain001(data: bytes | str, *, profile: str = "sepa_sct") -> PaymentFil
         for transaction in _all(payment_info, "CdtTrfTxInf", PAIN09):
             index = len(payments) + len(batch)
             issues: list[Diagnostic] = []
-            def fail(condition: bool, code: str) -> None:
+            def fail(
+                condition: bool,
+                code: str,
+                *,
+                target: list[Diagnostic] = issues,
+                transaction_index: int = index,
+            ) -> None:
                 if condition:
-                    issues.append(_issue(code, "transaction", index))
+                    target.append(_issue(code, "transaction", transaction_index))
             e2e = _text(transaction, "PmtId/EndToEndId", PAIN09)
             instr = _text(transaction, "PmtId/InstrId", PAIN09)
             creditor = normalize_iban(_text(transaction, "CdtrAcct/Id/IBAN", PAIN09))
