@@ -1,8 +1,6 @@
 name: Synthetic Spark scale benchmark
 on:
   workflow_dispatch:
-  push:
-    branches: [bench/large-synthetic-spark]
 permissions:
   contents: read
 concurrency:
